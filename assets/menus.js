@@ -8,6 +8,7 @@ jQuery( function( $ ) {
 
     $( '#submit-wpait-language-menu' ).on( 'click', function( event ) {
         event.preventDefault();
+        event.stopImmediatePropagation();
 
         var $checkbox = $metaBox.find( '.menu-item-checkbox' ).first();
 
@@ -16,7 +17,7 @@ jQuery( function( $ ) {
         }
 
         $checkbox.prop( 'checked', true );
-        wpNavMenu.addItemToMenu( $checkbox );
+        wpNavMenu.addItemToMenu( $( this ) );
         $checkbox.prop( 'checked', false );
     } );
 } );
