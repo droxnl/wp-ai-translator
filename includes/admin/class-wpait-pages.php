@@ -235,6 +235,7 @@ class WPAIT_Pages {
                 'defaultLanguage' => $settings['default_language'],
                 'emptyQueueText' => __( 'No queued jobs yet.', 'wp-ai-translator' ),
                 'emptySelectionText' => __( 'Select at least one page.', 'wp-ai-translator' ),
+                'clearedText'    => __( 'Translation history cleared.', 'wp-ai-translator' ),
             )
         );
     }
@@ -275,6 +276,7 @@ class WPAIT_Pages {
                     <div class="wpait-modal__notice" id="wpait-modal-notice" aria-live="polite"></div>
                 </div>
                 <div class="wpait-modal__footer">
+                    <button type="button" class="button wpait-modal__clear"><?php esc_html_e( 'Clear History', 'wp-ai-translator' ); ?></button>
                     <button type="button" class="button button-secondary wpait-modal__cancel"><?php esc_html_e( 'Cancel', 'wp-ai-translator' ); ?></button>
                     <button type="button" class="button button-primary wpait-modal__confirm"><?php esc_html_e( 'Start Translation', 'wp-ai-translator' ); ?></button>
                 </div>
@@ -320,7 +322,7 @@ class WPAIT_Pages {
         wp_send_json_success(
             array(
                 'queued' => $queued,
-                'queue'  => self::get_queue_payload(),
+                'queue'  => WPAIT_Queue::get_queue_payload(),
             )
         );
     }
@@ -332,23 +334,9 @@ class WPAIT_Pages {
         }
         wp_send_json_success(
             array(
-                'queue' => self::get_queue_payload(),
+                'queue' => WPAIT_Queue::get_queue_payload(),
             )
         );
-    }
-
-    private static function get_queue_payload() {
-        $queue = WPAIT_Queue::get_queue();
-        $items = array();
-        foreach ( $queue as $job ) {
-            $items[] = array(
-                'post_title' => get_the_title( $job['post_id'] ),
-                'language'   => strtoupper( $job['target_language'] ),
-                'status'     => ucfirst( $job['status'] ),
-                'message'    => $job['message'] ?? '',
-            );
-        }
-        return $items;
     }
 
     private static function get_language_counts( $languages, $default_language ) {

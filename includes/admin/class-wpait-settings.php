@@ -5,7 +5,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class WPAIT_Settings {
-    const OPTION_KEY = 'wpait_settings';
+    const OPTION_API_KEY      = 'wpait_api_settings';
+    const OPTION_LANGUAGE_KEY = 'wpait_language_settings';
+    const OPTION_MENU_KEY     = 'wpait_menu_settings';
+
+    private static $menu_hooks = array();
 
     public static function register() {
         add_action( 'admin_menu', array( __CLASS__, 'add_menu' ) );
@@ -15,37 +19,72 @@ class WPAIT_Settings {
     }
 
     public static function enqueue_assets( $hook ) {
-        if ( 'settings_page_wpait-settings' !== $hook ) {
+        if ( empty( self::$menu_hooks ) || ! in_array( $hook, self::$menu_hooks, true ) ) {
             return;
         }
         wp_enqueue_style( 'wpait-admin', WPAIT_PLUGIN_URL . 'assets/admin.css', array(), WPAIT_VERSION );
     }
 
     public static function add_menu() {
-        add_options_page(
+        $main_hook = add_menu_page(
             __( 'WP AI Translator', 'wp-ai-translator' ),
             __( 'WP AI Translator', 'wp-ai-translator' ),
             'manage_options',
-            'wpait-settings',
-            array( __CLASS__, 'render_page' )
+            'wpait',
+            array( __CLASS__, 'render_ai_settings_page' ),
+            'dashicons-translation',
+            60
         );
+        self::$menu_hooks[] = $main_hook;
+
+        $ai_hook = add_submenu_page(
+            'wpait',
+            __( 'AI Settings', 'wp-ai-translator' ),
+            __( 'AI Settings', 'wp-ai-translator' ),
+            'manage_options',
+            'wpait-ai-settings',
+            array( __CLASS__, 'render_ai_settings_page' )
+        );
+        self::$menu_hooks[] = $ai_hook;
+
+        $languages_hook = add_submenu_page(
+            'wpait',
+            __( 'Languages', 'wp-ai-translator' ),
+            __( 'Languages', 'wp-ai-translator' ),
+            'manage_options',
+            'wpait-languages',
+            array( __CLASS__, 'render_languages_page' )
+        );
+        self::$menu_hooks[] = $languages_hook;
+
+        $menus_hook = add_submenu_page(
+            'wpait',
+            __( 'Menus', 'wp-ai-translator' ),
+            __( 'Menus', 'wp-ai-translator' ),
+            'manage_options',
+            'wpait-menus',
+            array( __CLASS__, 'render_menus_page' )
+        );
+        self::$menu_hooks[] = $menus_hook;
     }
 
     public static function register_settings() {
-        register_setting( 'wpait_settings', self::OPTION_KEY );
+        register_setting( 'wpait_ai_settings', self::OPTION_API_KEY );
+        register_setting( 'wpait_language_settings', self::OPTION_LANGUAGE_KEY, array( __CLASS__, 'sanitize_language_settings' ) );
+        register_setting( 'wpait_menu_settings', self::OPTION_MENU_KEY );
 
         add_settings_section(
             'wpait_api_section',
             __( 'API Settings', 'wp-ai-translator' ),
             '__return_false',
-            'wpait-settings'
+            'wpait-ai-settings'
         );
 
         add_settings_field(
             'api_key',
             __( 'ChatGPT API Key', 'wp-ai-translator' ),
             array( __CLASS__, 'render_api_key' ),
-            'wpait-settings',
+            'wpait-ai-settings',
             'wpait_api_section'
         );
 
@@ -53,7 +92,7 @@ class WPAIT_Settings {
             'model',
             __( 'Model', 'wp-ai-translator' ),
             array( __CLASS__, 'render_model' ),
-            'wpait-settings',
+            'wpait-ai-settings',
             'wpait_api_section'
         );
 
@@ -61,14 +100,14 @@ class WPAIT_Settings {
             'wpait_language_section',
             __( 'Languages', 'wp-ai-translator' ),
             '__return_false',
-            'wpait-settings'
+            'wpait-languages'
         );
 
         add_settings_field(
             'default_language',
             __( 'Default Language', 'wp-ai-translator' ),
             array( __CLASS__, 'render_default_language' ),
-            'wpait-settings',
+            'wpait-languages',
             'wpait_language_section'
         );
 
@@ -76,16 +115,23 @@ class WPAIT_Settings {
             'languages',
             __( 'Available Languages', 'wp-ai-translator' ),
             array( __CLASS__, 'render_languages' ),
-            'wpait-settings',
+            'wpait-languages',
             'wpait_language_section'
+        );
+
+        add_settings_section(
+            'wpait_menu_section',
+            __( 'Menu Assignments', 'wp-ai-translator' ),
+            '__return_false',
+            'wpait-menus'
         );
 
         add_settings_field(
             'menu_assignments',
             __( 'Menu Assignments', 'wp-ai-translator' ),
             array( __CLASS__, 'render_menu_assignments' ),
-            'wpait-settings',
-            'wpait_language_section'
+            'wpait-menus',
+            'wpait_menu_section'
         );
     }
 
@@ -97,8 +143,11 @@ class WPAIT_Settings {
             'default_language' => 'en',
             'menu_assignments' => array(),
         );
-        $settings = get_option( self::OPTION_KEY, array() );
-        $settings = wp_parse_args( $settings, $defaults );
+        $api_settings      = get_option( self::OPTION_API_KEY, array() );
+        $language_settings = get_option( self::OPTION_LANGUAGE_KEY, array() );
+        $menu_settings     = get_option( self::OPTION_MENU_KEY, array() );
+
+        $settings = array_merge( $defaults, $api_settings, $language_settings, $menu_settings );
         $available = self::get_available_languages();
         if ( empty( $settings['default_language'] ) || ! isset( $available[ $settings['default_language'] ] ) ) {
             $settings['default_language'] = $defaults['default_language'];
@@ -113,11 +162,31 @@ class WPAIT_Settings {
         return $settings;
     }
 
+    public static function sanitize_language_settings( $settings ) {
+        $settings = is_array( $settings ) ? $settings : array();
+        $available = self::get_available_languages();
+        $languages = isset( $settings['languages'] ) ? (array) $settings['languages'] : array();
+        $languages = array_values( array_intersect( $languages, array_keys( $available ) ) );
+        $default_language = isset( $settings['default_language'] ) ? sanitize_text_field( $settings['default_language'] ) : 'en';
+
+        if ( ! isset( $available[ $default_language ] ) ) {
+            $default_language = 'en';
+        }
+        if ( ! in_array( $default_language, $languages, true ) ) {
+            $languages[] = $default_language;
+        }
+
+        $settings['default_language'] = $default_language;
+        $settings['languages']        = $languages;
+
+        return $settings;
+    }
+
     public static function render_api_key() {
         $settings = self::get_settings();
         printf(
             '<input type="password" class="regular-text" name="%1$s[api_key]" value="%2$s" autocomplete="off" />',
-            esc_attr( self::OPTION_KEY ),
+            esc_attr( self::OPTION_API_KEY ),
             esc_attr( $settings['api_key'] )
         );
     }
@@ -125,7 +194,7 @@ class WPAIT_Settings {
     public static function render_model() {
         $settings = self::get_settings();
         $models   = array( 'gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini' );
-        echo '<select name="' . esc_attr( self::OPTION_KEY ) . '[model]">';
+        echo '<select name="' . esc_attr( self::OPTION_API_KEY ) . '[model]">';
         foreach ( $models as $model ) {
             printf(
                 '<option value="%1$s" %2$s>%1$s</option>',
@@ -139,7 +208,7 @@ class WPAIT_Settings {
     public static function render_default_language() {
         $settings  = self::get_settings();
         $languages = self::get_available_languages();
-        echo '<select name="' . esc_attr( self::OPTION_KEY ) . '[default_language]">';
+        echo '<select name="' . esc_attr( self::OPTION_LANGUAGE_KEY ) . '[default_language]">';
         foreach ( $languages as $code => $language ) {
             printf(
                 '<option value="%1$s" %2$s>%3$s</option>',
@@ -161,7 +230,7 @@ class WPAIT_Settings {
             $flag    = esc_url( WPAIT_PLUGIN_URL . 'assets/flags/' . $language['flag'] );
             printf(
                 '<label class="wpait-language-card"><input type="checkbox" name="%1$s[languages][]" value="%2$s" %3$s /><span class="wpait-language-flag"><img src="%4$s" alt="%5$s" /></span><span class="wpait-language-name">%5$s</span></label>',
-                esc_attr( self::OPTION_KEY ),
+                esc_attr( self::OPTION_LANGUAGE_KEY ),
                 esc_attr( $code ),
                 checked( $checked, true, false ),
                 $flag,
@@ -199,7 +268,7 @@ class WPAIT_Settings {
             printf(
                 '<select id="wpait-menu-assignment-%1$s" name="%2$s[menu_assignments][%1$s]">',
                 esc_attr( $code ),
-                esc_attr( self::OPTION_KEY )
+                esc_attr( self::OPTION_MENU_KEY )
             );
             echo '<option value="0">' . esc_html__( 'Default menu', 'wp-ai-translator' ) . '</option>';
             foreach ( $menus as $menu ) {
@@ -242,18 +311,46 @@ class WPAIT_Settings {
         );
     }
 
-    public static function render_page() {
+    public static function render_ai_settings_page() {
         if ( ! current_user_can( 'manage_options' ) ) {
             return;
         }
         echo '<div class="wrap">';
-        echo '<h1>' . esc_html__( 'WP AI Translator Settings', 'wp-ai-translator' ) . '</h1>';
+        echo '<h1>' . esc_html__( 'AI Settings', 'wp-ai-translator' ) . '</h1>';
+        echo '<form method="post" action="options.php">';
+        settings_fields( 'wpait_ai_settings' );
+        do_settings_sections( 'wpait-ai-settings' );
+        submit_button();
+        echo '</form>';
+        echo '</div>';
+    }
+
+    public static function render_languages_page() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html__( 'Languages', 'wp-ai-translator' ) . '</h1>';
+        echo '<form method="post" action="options.php">';
+        settings_fields( 'wpait_language_settings' );
+        do_settings_sections( 'wpait-languages' );
+        submit_button();
+        echo '</form>';
+        echo '</div>';
+    }
+
+    public static function render_menus_page() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html__( 'Menus', 'wp-ai-translator' ) . '</h1>';
         if ( isset( $_GET['wpait_menus'] ) && 'cloned' === $_GET['wpait_menus'] ) {
             echo '<div class="notice notice-success"><p>' . esc_html__( 'Menus cloned successfully.', 'wp-ai-translator' ) . '</p></div>';
         }
         echo '<form method="post" action="options.php">';
-        settings_fields( 'wpait_settings' );
-        do_settings_sections( 'wpait-settings' );
+        settings_fields( 'wpait_menu_settings' );
+        do_settings_sections( 'wpait-menus' );
         submit_button();
         echo '</form>';
 
@@ -310,7 +407,7 @@ class WPAIT_Settings {
         }
 
         update_option( 'wpait_menu_clones', $created, false );
-        wp_safe_redirect( admin_url( 'options-general.php?page=wpait-settings&wpait_menus=cloned' ) );
+        wp_safe_redirect( admin_url( 'admin.php?page=wpait-menus&wpait_menus=cloned' ) );
         exit;
     }
 }
