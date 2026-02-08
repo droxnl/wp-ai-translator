@@ -9,9 +9,8 @@ class WPAIT_Pages {
         add_filter( 'manage_edit-page_columns', array( __CLASS__, 'add_columns' ) );
         add_action( 'manage_page_posts_custom_column', array( __CLASS__, 'render_columns' ), 10, 2 );
         add_action( 'restrict_manage_posts', array( __CLASS__, 'add_language_filter' ) );
+        add_filter( 'views_edit-page', array( __CLASS__, 'add_language_views' ) );
         add_filter( 'parse_query', array( __CLASS__, 'filter_by_language' ) );
-        add_filter( 'bulk_actions-edit-page', array( __CLASS__, 'register_bulk_actions' ) );
-        add_filter( 'handle_bulk_actions-edit-page', array( __CLASS__, 'handle_bulk_actions' ), 10, 3 );
         add_filter( 'post_row_actions', array( __CLASS__, 'add_row_action' ), 10, 2 );
         add_action( 'admin_init', array( __CLASS__, 'handle_row_action' ) );
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
@@ -29,15 +28,23 @@ class WPAIT_Pages {
     public static function render_columns( $column, $post_id ) {
         if ( 'wpait_language' === $column ) {
             $language = get_post_meta( $post_id, '_wpait_language', true );
-            if ( $language ) {
-                echo esc_html( strtoupper( $language ) );
-            } else {
-                $settings  = WPAIT_Settings::get_settings();
-                $languages = WPAIT_Settings::get_available_languages();
-                $default   = $settings['default_language'];
-                $label     = isset( $languages[ $default ] ) ? $languages[ $default ]['label'] : strtoupper( $default );
-                echo esc_html( sprintf( '%1$s (%2$s)', $label, strtoupper( $default ) ) );
+            $settings  = WPAIT_Settings::get_settings();
+            $languages = WPAIT_Settings::get_available_languages();
+            $code      = $language ? $language : $settings['default_language'];
+            $label     = isset( $languages[ $code ] ) ? $languages[ $code ]['label'] : strtoupper( $code );
+            $flag      = isset( $languages[ $code ]['flag'] ) ? $languages[ $code ]['flag'] : '';
+            $flag_url  = $flag ? esc_url( WPAIT_PLUGIN_URL . 'assets/flags/' . $flag ) : '';
+
+            echo '<span class="wpait-language-cell">';
+            if ( $flag_url ) {
+                printf(
+                    '<span class="wpait-language-cell__flag"><img src="%1$s" alt="%2$s" /></span>',
+                    $flag_url,
+                    esc_attr( $label )
+                );
             }
+            echo esc_html( sprintf( '%1$s (%2$s)', $label, strtoupper( $code ) ) );
+            echo '</span>';
         }
 
         if ( 'wpait_translations' === $column ) {
@@ -70,24 +77,44 @@ class WPAIT_Pages {
         if ( 'page' !== $post_type ) {
             return;
         }
+        echo '<button type="button" class="button wpait-translate-selected" id="wpait-translate-selected">' . esc_html__( 'Translate selected pages', 'wp-ai-translator' ) . '</button>';
+    }
+
+    public static function add_language_views( $views ) {
+        $screen = get_current_screen();
+        if ( ! $screen || 'page' !== $screen->post_type ) {
+            return $views;
+        }
+
         $settings  = WPAIT_Settings::get_settings();
         $languages = WPAIT_Settings::get_available_languages();
         $current   = isset( $_GET['wpait_language'] ) ? sanitize_text_field( wp_unslash( $_GET['wpait_language'] ) ) : '';
+        $counts    = self::get_language_counts( $settings['languages'], $settings['default_language'] );
+        $base_url  = remove_query_arg( array( 'wpait_language', 'paged' ) );
 
-        echo '<select name="wpait_language">';
-        echo '<option value="">' . esc_html__( 'All Languages', 'wp-ai-translator' ) . '</option>';
+        $language_views = array();
+        $language_views['wpait_language_all'] = sprintf(
+            '<a href="%1$s" class="%2$s">%3$s</a>',
+            esc_url( $base_url ),
+            esc_attr( $current ? '' : 'current' ),
+            esc_html( sprintf( __( 'All Languages (%d)', 'wp-ai-translator' ), $counts['all'] ) )
+        );
+
         foreach ( $settings['languages'] as $language ) {
             if ( ! isset( $languages[ $language ] ) ) {
                 continue;
             }
-            printf(
-                '<option value="%1$s" %2$s>%3$s</option>',
-                esc_attr( $language ),
-                selected( $current, $language, false ),
-                esc_html( $languages[ $language ]['label'] )
+            $label = $languages[ $language ]['label'];
+            $count = $counts['languages'][ $language ] ?? 0;
+            $language_views[ 'wpait_language_' . $language ] = sprintf(
+                '<a href="%1$s" class="%2$s">%3$s</a>',
+                esc_url( add_query_arg( 'wpait_language', $language, $base_url ) ),
+                esc_attr( $current === $language ? 'current' : '' ),
+                esc_html( sprintf( '%1$s (%2$d)', $label, $count ) )
             );
         }
-        echo '</select>';
+
+        return array_merge( $views, $language_views );
     }
 
     public static function filter_by_language( $query ) {
@@ -101,6 +128,19 @@ class WPAIT_Pages {
             return $query;
         }
         $language = sanitize_text_field( wp_unslash( $_GET['wpait_language'] ) );
+        $settings = WPAIT_Settings::get_settings();
+        if ( $language === $settings['default_language'] ) {
+            $query->set(
+                'meta_query',
+                array(
+                    array(
+                        'key'     => '_wpait_language',
+                        'compare' => 'NOT EXISTS',
+                    ),
+                )
+            );
+            return $query;
+        }
         $query->set(
             'meta_query',
             array(
@@ -111,39 +151,6 @@ class WPAIT_Pages {
             )
         );
         return $query;
-    }
-
-    public static function register_bulk_actions( $actions ) {
-        $actions['wpait_translate'] = __( 'Duplicate & Translate', 'wp-ai-translator' );
-        return $actions;
-    }
-
-    public static function handle_bulk_actions( $redirect_to, $doaction, $post_ids ) {
-        if ( 'wpait_translate' !== $doaction ) {
-            return $redirect_to;
-        }
-        $settings  = WPAIT_Settings::get_settings();
-        $languages = array_diff( (array) $settings['languages'], array( $settings['default_language'] ) );
-        $queued    = 0;
-
-        foreach ( $post_ids as $post_id ) {
-            foreach ( $languages as $language ) {
-                if ( WPAIT_Translator::has_translation( $post_id, $language ) ) {
-                    continue;
-                }
-                WPAIT_Queue::enqueue(
-                    array(
-                        'post_id'         => $post_id,
-                        'target_language' => $language,
-                        'status'          => 'pending',
-                        'message'         => __( 'Queued for translation.', 'wp-ai-translator' ),
-                    )
-                );
-                $queued++;
-            }
-        }
-
-        return add_query_arg( 'wpait_queued', $queued, $redirect_to );
     }
 
     public static function add_row_action( $actions, $post ) {
@@ -342,5 +349,42 @@ class WPAIT_Pages {
             );
         }
         return $items;
+    }
+
+    private static function get_language_counts( $languages, $default_language ) {
+        $counts = array(
+            'all'       => 0,
+            'languages' => array(),
+        );
+        $total_counts = (array) wp_count_posts( 'page' );
+        $counts['all'] = array_sum( array_map( 'intval', $total_counts ) );
+
+        foreach ( (array) $languages as $language ) {
+            $query_args = array(
+                'post_type'      => 'page',
+                'post_status'    => 'any',
+                'fields'         => 'ids',
+                'posts_per_page' => 1,
+                'no_found_rows'  => false,
+                'meta_query'     => array(
+                    array(
+                        'key'   => '_wpait_language',
+                        'value' => $language,
+                    ),
+                ),
+            );
+
+            if ( $language === $default_language ) {
+                $query_args['meta_query'][0] = array(
+                    'key'     => '_wpait_language',
+                    'compare' => 'NOT EXISTS',
+                );
+            }
+
+            $query = new WP_Query( $query_args );
+            $counts['languages'][ $language ] = (int) $query->found_posts;
+        }
+
+        return $counts;
     }
 }

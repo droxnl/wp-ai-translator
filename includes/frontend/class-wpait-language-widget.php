@@ -25,7 +25,7 @@ class WPAIT_Language_Widget extends WP_Widget {
             echo $args['before_title'] . apply_filters( 'widget_title', $title ) . $args['after_title'];
         }
 
-        $options = $this->build_language_options( $settings );
+        $options = $this->build_language_items( $settings );
         $current = $this->get_current_language( $settings );
 
         if ( ! empty( $options ) ) {
@@ -71,7 +71,46 @@ class WPAIT_Language_Widget extends WP_Widget {
         return $instance;
     }
 
-    private function build_language_options( $settings ) {
+    public static function render_menu_shortcode( $atts ) {
+        $settings = WPAIT_Settings::get_settings();
+        $widget   = new self();
+        $items    = $widget->build_language_items( $settings );
+        $current  = $widget->get_current_language( $settings );
+
+        if ( empty( $items ) ) {
+            return '';
+        }
+
+        $output = '<div class="wpait-language-menu" aria-label="' . esc_attr__( 'Language selector', 'wp-ai-translator' ) . '">';
+        foreach ( $items as $language_code => $data ) {
+            $classes = array( 'wpait-language-menu__item' );
+            $attrs   = '';
+            $url     = $data['enabled'] ? $data['url'] : '#';
+
+            if ( $language_code === $current ) {
+                $classes[] = 'is-current';
+                $attrs    .= ' aria-current="page"';
+            }
+            if ( ! $data['enabled'] ) {
+                $classes[] = 'is-disabled';
+                $attrs    .= ' aria-disabled="true" tabindex="-1"';
+            }
+
+            $output .= sprintf(
+                '<a class="%1$s" href="%2$s"%3$s>%4$s<span class="wpait-language-menu__label">%5$s</span></a>',
+                esc_attr( implode( ' ', $classes ) ),
+                esc_url( $url ),
+                $attrs,
+                $data['flag'] ? '<span class="wpait-language-menu__flag"><img src="' . esc_url( $data['flag'] ) . '" alt="' . esc_attr( $data['label'] ) . '" /></span>' : '',
+                esc_html( $data['label'] )
+            );
+        }
+        $output .= '</div>';
+
+        return $output;
+    }
+
+    private function build_language_items( $settings ) {
         $available = WPAIT_Settings::get_available_languages();
         $options   = array();
         $group     = $this->get_translation_group();
@@ -85,10 +124,13 @@ class WPAIT_Language_Widget extends WP_Widget {
             $url     = $this->resolve_language_url( $language_code, $settings, $group, $post_type );
             $enabled = ! empty( $url );
 
+            $flag = isset( $available[ $language_code ]['flag'] ) ? WPAIT_PLUGIN_URL . 'assets/flags/' . $available[ $language_code ]['flag'] : '';
+
             $options[ $language_code ] = array(
                 'label'   => $available[ $language_code ]['label'],
                 'url'     => $url ? $url : '#',
                 'enabled' => $enabled,
+                'flag'    => $flag,
             );
         }
 
