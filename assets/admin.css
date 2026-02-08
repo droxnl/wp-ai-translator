@@ -26,3 +26,76 @@
 .wpait-language-name {
   font-weight: 600;
 }
+
+.wpait-logs-actions {
+  margin: 16px 0;
+}
+
+.wpait-logs-table td {
+  vertical-align: top;
+}
+
+.wpait-log-meta {
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.wpait-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100000;
+}
+
+.wpait-modal--active {
+  display: flex;
+}
+
+.wpait-modal__dialog {
+  background: #fff;
+  border-radius: 8px;
+  max-width: 720px;
+  width: 90%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.wpait-modal__header,
+.wpait-modal__footer {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e5e5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wpait-modal__footer {
+  border-bottom: none;
+  border-top: 1px solid #e5e5e5;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.wpait-modal__body {
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+.wpait-modal__close {
+  border: none;
+  background: transparent;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.wpait-modal__progress-table {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid #dcdcde;
+  border-radius: 6px;
+}

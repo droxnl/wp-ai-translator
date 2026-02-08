@@ -11,6 +11,7 @@
     const closeButton = modal.querySelector('.wpait-modal__close');
     const cancelButton = modal.querySelector('.wpait-modal__cancel');
     const confirmButton = modal.querySelector('.wpait-modal__confirm');
+    const clearButton = modal.querySelector('.wpait-modal__clear');
     const translateButton = document.getElementById('wpait-translate-selected');
     let selectedPostIds = [];
     let poller = null;
@@ -146,6 +147,27 @@
             confirmButton.disabled = false;
         });
     });
+
+    if (clearButton) {
+        clearButton.addEventListener('click', () => {
+            clearButton.disabled = true;
+            $.post(wpaitPages.ajaxUrl, {
+                action: 'wpait_clear_queue',
+                nonce: wpaitPages.nonce,
+            }).done((response) => {
+                if (response.success) {
+                    renderQueue([]);
+                    setNotice(wpaitPages.clearedText || 'Translation history cleared.');
+                } else {
+                    setNotice(response.data && response.data.message ? response.data.message : 'Unable to clear history.', true);
+                }
+            }).fail(() => {
+                setNotice('Unable to clear history.', true);
+            }).always(() => {
+                clearButton.disabled = false;
+            });
+        });
+    }
 
     closeButton.addEventListener('click', closeModal);
     cancelButton.addEventListener('click', closeModal);
