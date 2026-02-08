@@ -47,6 +47,12 @@ class WPAIT_Menus {
         echo '<ul class="categorychecklist form-no-clear">';
         echo walk_nav_menu_tree( array( $item ), 0, (object) array( 'walker' => $walker ) );
         echo '</ul>';
+        echo '<p class="button-controls">';
+        echo '<span class="add-to-menu">';
+        echo '<button type="submit" class="button-secondary submit-add-to-menu right" value="' . esc_attr__( 'Add to Menu', 'wp-ai-translator' ) . '" name="add-wpait-language-menu" id="submit-wpait-language-menu">' . esc_html__( 'Add to Menu', 'wp-ai-translator' ) . '</button>';
+        echo '<span class="spinner"></span>';
+        echo '</span>';
+        echo '</p>';
         echo '</div>';
     }
 
