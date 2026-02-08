@@ -107,7 +107,7 @@ class WPAIT_Menus {
     }
 
     public static function setup_menu_item( $item ) {
-        $is_language_menu = self::is_language_menu_item( $item );
+        $is_language_menu = self::is_language_menu_parent_item( $item );
         if ( $is_language_menu ) {
             $item->type_label = __( 'Language Selector', 'wp-ai-translator' );
             $item->url        = '#';
@@ -132,10 +132,12 @@ class WPAIT_Menus {
             return $items;
         }
 
-        $new_items = $items;
+        $new_items = array();
 
         foreach ( $items as $item ) {
-            if ( ! self::is_language_menu_item( $item ) ) {
+            $new_items[] = $item;
+
+            if ( ! self::is_language_menu_parent_item( $item ) ) {
                 continue;
             }
 
@@ -147,12 +149,14 @@ class WPAIT_Menus {
             }
 
             $children = array();
+            $order    = isset( $item->menu_order ) ? (int) $item->menu_order : 0;
             foreach ( $language_items as $code => $data ) {
                 if ( $code === $current ) {
                     continue;
                 }
 
-                $children[] = self::build_child_menu_item( $item, $code, $data );
+                $order++;
+                $children[] = self::build_child_menu_item( $item, $code, $data, $order );
             }
 
             if ( ! empty( $children ) ) {
@@ -185,7 +189,7 @@ class WPAIT_Menus {
     }
 
     public static function filter_language_menu_link_attributes( $atts, $item, $args ) {
-        if ( self::is_language_menu_item( $item ) ) {
+        if ( self::is_language_menu_parent_item( $item ) ) {
             $atts['href'] = '#';
         }
 
@@ -225,7 +229,7 @@ class WPAIT_Menus {
         return $language;
     }
 
-    private static function is_language_menu_item( $item ) {
+    private static function is_language_menu_parent_item( $item ) {
         $is_language_menu = get_post_meta( $item->ID, self::MENU_ITEM_META_KEY, true );
         if ( $is_language_menu ) {
             return true;
@@ -274,7 +278,7 @@ class WPAIT_Menus {
         return $items;
     }
 
-    private static function build_child_menu_item( $parent_item, $language_code, $data ) {
+    private static function build_child_menu_item( $parent_item, $language_code, $data, $menu_order = 0 ) {
         $item_id = self::get_placeholder_id();
 
         $item                       = new stdClass();
@@ -289,8 +293,14 @@ class WPAIT_Menus {
         $item->target               = '';
         $item->attr_title           = '';
         $item->description          = '';
-        $item->classes              = array( 'wpait-language-menu__child' );
+        $item->classes              = array(
+            'menu-item',
+            'menu-item-type-custom',
+            'menu-item-object-custom',
+            'wpait-language-menu__child',
+        );
         $item->xfn                  = '';
+        $item->menu_order           = $menu_order;
         $item->status               = 'publish';
         $item->wpait_language_code  = $language_code;
         $item->wpait_language_label = $data['label'];
