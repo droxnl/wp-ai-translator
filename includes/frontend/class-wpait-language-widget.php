@@ -38,7 +38,7 @@ class WPAIT_Language_Widget extends WP_Widget {
                 printf(
                     '<option value="%1$s" %2$s %3$s>%4$s</option>',
                     esc_url( $data['url'] ),
-                    selected( $current, $language_code, false ),
+                    selected( true, ( $data['current'] || $current === $language_code ), false ),
                     disabled( ! $data['enabled'], true, false ),
                     esc_html( $data['label'] )
                 );
@@ -87,7 +87,7 @@ class WPAIT_Language_Widget extends WP_Widget {
             $attrs   = '';
             $url     = $data['enabled'] ? $data['url'] : '#';
 
-            if ( $language_code === $current ) {
+            if ( $data['current'] || $language_code === $current ) {
                 $classes[] = 'is-current';
                 $attrs    .= ' aria-current="page"';
             }
@@ -131,7 +131,39 @@ class WPAIT_Language_Widget extends WP_Widget {
                 'url'     => $url ? $url : '#',
                 'enabled' => $enabled,
                 'flag'    => $flag,
+                'current' => false,
             );
+        }
+
+        $options = apply_filters(
+            'wpait_language_menu_items',
+            $options,
+            $settings,
+            array(
+                'group'     => $group,
+                'post_type' => $post_type,
+                'post_id'   => $this->get_post_id(),
+            )
+        );
+
+        foreach ( (array) $options as $code => $data ) {
+            $normalized = wp_parse_args(
+                $data,
+                array(
+                    'label'   => '',
+                    'url'     => '#',
+                    'enabled' => true,
+                    'flag'    => '',
+                    'current' => false,
+                )
+            );
+
+            if ( '' === $normalized['label'] ) {
+                unset( $options[ $code ] );
+                continue;
+            }
+
+            $options[ $code ] = $normalized;
         }
 
         return $options;

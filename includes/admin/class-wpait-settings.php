@@ -79,6 +79,14 @@ class WPAIT_Settings {
             'wpait-settings',
             'wpait_language_section'
         );
+
+        add_settings_field(
+            'menu_assignments',
+            __( 'Menu Assignments', 'wp-ai-translator' ),
+            array( __CLASS__, 'render_menu_assignments' ),
+            'wpait-settings',
+            'wpait_language_section'
+        );
     }
 
     public static function get_settings() {
@@ -87,6 +95,7 @@ class WPAIT_Settings {
             'model'     => 'gpt-4o-mini',
             'languages' => array( 'en', 'nl' ),
             'default_language' => 'en',
+            'menu_assignments' => array(),
         );
         $settings = get_option( self::OPTION_KEY, array() );
         $settings = wp_parse_args( $settings, $defaults );
@@ -96,6 +105,10 @@ class WPAIT_Settings {
         }
         if ( ! in_array( $settings['default_language'], (array) $settings['languages'], true ) ) {
             $settings['languages'][] = $settings['default_language'];
+        }
+
+        if ( empty( $settings['menu_assignments'] ) || ! is_array( $settings['menu_assignments'] ) ) {
+            $settings['menu_assignments'] = array();
         }
         return $settings;
     }
@@ -155,6 +168,52 @@ class WPAIT_Settings {
                 esc_html( $language['label'] )
             );
         }
+        echo '</div>';
+    }
+
+    public static function render_menu_assignments() {
+        $settings  = self::get_settings();
+        $available = self::get_available_languages();
+        $menus     = wp_get_nav_menus();
+
+        if ( empty( $menus ) ) {
+            echo '<p class="description">' . esc_html__( 'Create a menu first to assign it to a language.', 'wp-ai-translator' ) . '</p>';
+            return;
+        }
+
+        echo '<div class="wpait-menu-assignments">';
+        foreach ( (array) $settings['languages'] as $code ) {
+            if ( ! isset( $available[ $code ] ) ) {
+                continue;
+            }
+
+            $language = $available[ $code ];
+            $selected = isset( $settings['menu_assignments'][ $code ] ) ? (int) $settings['menu_assignments'][ $code ] : 0;
+            echo '<p>';
+            printf(
+                '<label for="wpait-menu-assignment-%1$s">%2$s</label>',
+                esc_attr( $code ),
+                esc_html( $language['label'] )
+            );
+            echo '<br />';
+            printf(
+                '<select id="wpait-menu-assignment-%1$s" name="%2$s[menu_assignments][%1$s]">',
+                esc_attr( $code ),
+                esc_attr( self::OPTION_KEY )
+            );
+            echo '<option value="0">' . esc_html__( 'Default menu', 'wp-ai-translator' ) . '</option>';
+            foreach ( $menus as $menu ) {
+                printf(
+                    '<option value="%1$d" %2$s>%3$s</option>',
+                    (int) $menu->term_id,
+                    selected( $selected, (int) $menu->term_id, false ),
+                    esc_html( $menu->name )
+                );
+            }
+            echo '</select>';
+            echo '</p>';
+        }
+        echo '<p class="description">' . esc_html__( 'Choose a menu to use when viewing each language.', 'wp-ai-translator' ) . '</p>';
         echo '</div>';
     }
 
