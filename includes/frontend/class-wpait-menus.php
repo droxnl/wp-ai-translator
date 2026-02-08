@@ -30,6 +30,7 @@ class WPAIT_Menus {
         $item              = new stdClass();
         $item->db_id        = 0;
         $item->object_id    = 0;
+        $item->ID           = self::get_placeholder_id();
         $item->object       = 'wpait_language_menu';
         $item->menu_item_parent = 0;
         $item->type         = 'custom';
@@ -54,6 +55,18 @@ class WPAIT_Menus {
         echo '</span>';
         echo '</p>';
         echo '</div>';
+    }
+
+    private static function get_placeholder_id() {
+        if ( ! isset( $GLOBALS['_nav_menu_placeholder'] ) ) {
+            $GLOBALS['_nav_menu_placeholder'] = 0;
+        }
+
+        $GLOBALS['_nav_menu_placeholder'] = ( 0 > $GLOBALS['_nav_menu_placeholder'] )
+            ? $GLOBALS['_nav_menu_placeholder'] - 1
+            : -1;
+
+        return $GLOBALS['_nav_menu_placeholder'];
     }
 
     public static function handle_menu_item_save( $menu_id, $menu_item_db_id, $args ) {
