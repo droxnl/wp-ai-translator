@@ -23,6 +23,7 @@ function autoload_wpait() {
     require_once WPAIT_PLUGIN_DIR . 'includes/admin/class-wpait-pages.php';
     require_once WPAIT_PLUGIN_DIR . 'includes/admin/class-wpait-queue.php';
     require_once WPAIT_PLUGIN_DIR . 'includes/api/class-wpait-openai.php';
+    require_once WPAIT_PLUGIN_DIR . 'includes/frontend/class-wpait-language-widget.php';
     require_once WPAIT_PLUGIN_DIR . 'includes/translation/class-wpait-translator.php';
 }
 
@@ -30,8 +31,13 @@ function wpait_bootstrap() {
     WPAIT_Settings::register();
     WPAIT_Pages::register();
     WPAIT_Queue::register();
+    add_action( 'widgets_init', 'wpait_register_language_widget' );
 }
 add_action( 'plugins_loaded', 'wpait_bootstrap' );
+
+function wpait_register_language_widget() {
+    register_widget( 'WPAIT_Language_Widget' );
+}
 
 function wpait_activate() {
     if ( ! wp_next_scheduled( 'wpait_process_queue' ) ) {
