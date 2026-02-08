@@ -105,30 +105,6 @@
             .map((checkbox) => checkbox.value);
     };
 
-    const getBulkActionValue = () => {
-        const actionTop = document.getElementById('bulk-action-selector-top');
-        const actionBottom = document.getElementById('bulk-action-selector-bottom');
-        const action = actionTop && actionTop.value !== '-1' ? actionTop.value : (actionBottom ? actionBottom.value : '-1');
-        return action;
-    };
-
-    if (form) {
-        form.addEventListener('submit', (event) => {
-            const action = getBulkActionValue();
-            if (action !== 'wpait_translate') {
-                return;
-            }
-            event.preventDefault();
-            const checked = form.querySelectorAll('input[name="post[]"]:checked');
-            const postIds = Array.from(checked).map((checkbox) => checkbox.value);
-            if (!postIds.length) {
-                window.alert(wpaitPages.emptySelectionText || 'Select at least one page.');
-                return;
-            }
-            openModal(postIds);
-        });
-    }
-
     if (translateButton) {
         translateButton.addEventListener('click', () => {
             if (!form) {

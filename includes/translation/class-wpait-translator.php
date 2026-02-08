@@ -34,6 +34,7 @@ class WPAIT_Translator {
             return new WP_Error( 'wpait_missing_post', __( 'Post not found.', 'wp-ai-translator' ) );
         }
 
+        $settings = WPAIT_Settings::get_settings();
         $group = get_post_meta( $post_id, '_wpait_translation_group', true );
         if ( ! $group ) {
             $group = uniqid( 'wpait_group_', true );
@@ -45,12 +46,32 @@ class WPAIT_Translator {
             return $translated_content;
         }
 
+        $new_post = array(
+            'post_title'   => $post->post_title . ' (' . strtoupper( $target_language ) . ')',
+            'post_content' => $translated_content,
+            'post_status'  => 'draft',
+            'post_type'    => $post->post_type,
+        );
+
+        if ( $target_language !== $settings['default_language'] ) {
+            $base_slug            = $post->post_name ? $post->post_name : sanitize_title( $post->post_title );
+            $translated_slug      = $target_language . '/' . $base_slug;
+            $new_post['post_name'] = wp_unique_post_slug(
+                $translated_slug,
+                0,
+                $new_post['post_status'],
+                $new_post['post_type'],
+                0
+            );
+        }
+
         $new_post_id = wp_insert_post(
             array(
-                'post_title'   => $post->post_title . ' (' . strtoupper( $target_language ) . ')',
-                'post_content' => $translated_content,
-                'post_status'  => 'draft',
-                'post_type'    => $post->post_type,
+                'post_title'   => $new_post['post_title'],
+                'post_content' => $new_post['post_content'],
+                'post_status'  => $new_post['post_status'],
+                'post_type'    => $new_post['post_type'],
+                'post_name'    => $new_post['post_name'] ?? '',
             )
         );
 
