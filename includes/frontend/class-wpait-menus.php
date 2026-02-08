@@ -6,13 +6,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class WPAIT_Menus {
     const MENU_ITEM_META_KEY = '_wpait_language_menu';
+    const MENU_ITEM_CLASS    = 'wp-ai-menu-switch';
 
     public static function register() {
         add_action( 'load-nav-menus.php', array( __CLASS__, 'register_menu_meta_box' ) );
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_admin_assets' ) );
         add_action( 'wp_update_nav_menu_item', array( __CLASS__, 'handle_menu_item_save' ), 10, 3 );
         add_filter( 'wp_setup_nav_menu_item', array( __CLASS__, 'setup_menu_item' ) );
-        add_filter( 'walker_nav_menu_start_el', array( __CLASS__, 'render_language_menu_item' ), 10, 4 );
+        add_filter( 'wp_nav_menu_objects', array( __CLASS__, 'inject_language_menu_items' ), 10, 2 );
+        add_filter( 'nav_menu_item_title', array( __CLASS__, 'filter_language_menu_title' ), 10, 4 );
+        add_filter( 'nav_menu_link_attributes', array( __CLASS__, 'filter_language_menu_link_attributes' ), 10, 3 );
         add_filter( 'wp_nav_menu_args', array( __CLASS__, 'assign_menu_for_language' ) );
     }
 
@@ -46,15 +49,15 @@ class WPAIT_Menus {
         $item->db_id        = 0;
         $item->object_id    = 0;
         $item->ID           = self::get_placeholder_id();
-        $item->object       = 'wpait_language_menu';
+        $item->object       = 'custom';
         $item->menu_item_parent = 0;
         $item->type         = 'custom';
         $item->title        = __( 'Language Selector', 'wp-ai-translator' );
-        $item->url          = '#wpait-language-menu';
+        $item->url          = '#';
         $item->target       = '';
         $item->attr_title   = '';
         $item->description  = '';
-        $item->classes      = array();
+        $item->classes      = array( self::MENU_ITEM_CLASS );
         $item->xfn          = '';
 
         $walker = new Walker_Nav_Menu_Checklist();
@@ -90,7 +93,12 @@ class WPAIT_Menus {
         }
 
         $object = sanitize_text_field( wp_unslash( $_POST['menu-item-object'][ $menu_item_db_id ] ) );
-        if ( 'wpait_language_menu' !== $object ) {
+        $classes = '';
+        if ( isset( $_POST['menu-item-classes'][ $menu_item_db_id ] ) ) {
+            $classes = sanitize_text_field( wp_unslash( $_POST['menu-item-classes'][ $menu_item_db_id ] ) );
+        }
+
+        if ( 'wpait_language_menu' !== $object && ! self::has_language_menu_class( $classes ) ) {
             delete_post_meta( $menu_item_db_id, self::MENU_ITEM_META_KEY );
             return;
         }
@@ -99,27 +107,89 @@ class WPAIT_Menus {
     }
 
     public static function setup_menu_item( $item ) {
-        $is_language_menu = get_post_meta( $item->ID, self::MENU_ITEM_META_KEY, true );
+        $is_language_menu = self::is_language_menu_item( $item );
         if ( $is_language_menu ) {
             $item->type_label = __( 'Language Selector', 'wp-ai-translator' );
-            $item->url        = '#wpait-language-menu';
+            $item->url        = '#';
+            if ( ! in_array( self::MENU_ITEM_CLASS, (array) $item->classes, true ) ) {
+                $item->classes[] = self::MENU_ITEM_CLASS;
+            }
         }
 
         return $item;
     }
 
-    public static function render_language_menu_item( $item_output, $item, $depth, $args ) {
-        $is_language_menu = get_post_meta( $item->ID, self::MENU_ITEM_META_KEY, true );
-        if ( ! $is_language_menu ) {
-            return $item_output;
+    public static function inject_language_menu_items( $items, $args ) {
+        if ( is_admin() ) {
+            return $items;
         }
 
-        $menu_markup = WPAIT_Language_Widget::render_menu_shortcode( array() );
-        if ( '' === $menu_markup ) {
-            return $item_output;
+        $settings        = WPAIT_Settings::get_settings();
+        $current         = self::get_current_language( $settings );
+        $language_items  = self::build_menu_language_items( $settings, $current );
+
+        if ( empty( $language_items ) ) {
+            return $items;
         }
 
-        return $menu_markup;
+        $new_items = $items;
+
+        foreach ( $items as $item ) {
+            if ( ! self::is_language_menu_item( $item ) ) {
+                continue;
+            }
+
+            $current_data = isset( $language_items[ $current ] ) ? $language_items[ $current ] : null;
+            if ( $current_data ) {
+                $item->wpait_language_code  = $current;
+                $item->wpait_language_label = $current_data['label'];
+                $item->wpait_language_flag  = $current_data['flag'];
+            }
+
+            $children = array();
+            foreach ( $language_items as $code => $data ) {
+                if ( $code === $current ) {
+                    continue;
+                }
+
+                $children[] = self::build_child_menu_item( $item, $code, $data );
+            }
+
+            if ( ! empty( $children ) ) {
+                $item->classes[] = 'menu-item-has-children';
+                $new_items       = array_merge( $new_items, $children );
+            }
+        }
+
+        return $new_items;
+    }
+
+    public static function filter_language_menu_title( $title, $item, $args, $depth ) {
+        if ( ! empty( $item->wpait_language_code ) ) {
+            $label = ! empty( $item->wpait_language_label ) ? $item->wpait_language_label : $title;
+            $flag  = ! empty( $item->wpait_language_flag )
+                ? '<span class="wpait-language-menu__flag"><img src="' . esc_url( $item->wpait_language_flag ) . '" alt="' . esc_attr( $label ) . '" /></span>'
+                : '';
+
+            if ( $flag ) {
+                $is_child = in_array( 'wpait-language-menu__child', (array) $item->classes, true );
+                if ( $is_child ) {
+                    $title = $flag . '<span class="wpait-language-menu__label">' . esc_html( $label ) . '</span>';
+                } else {
+                    $title = $flag . '<span class="screen-reader-text">' . esc_html( $label ) . '</span>';
+                }
+            }
+        }
+
+        return $title;
+    }
+
+    public static function filter_language_menu_link_attributes( $atts, $item, $args ) {
+        if ( self::is_language_menu_item( $item ) ) {
+            $atts['href'] = '#';
+        }
+
+        return $atts;
     }
 
     public static function assign_menu_for_language( $args ) {
@@ -153,5 +223,79 @@ class WPAIT_Menus {
         }
 
         return $language;
+    }
+
+    private static function is_language_menu_item( $item ) {
+        $is_language_menu = get_post_meta( $item->ID, self::MENU_ITEM_META_KEY, true );
+        if ( $is_language_menu ) {
+            return true;
+        }
+
+        return self::has_language_menu_class( isset( $item->classes ) ? $item->classes : array() );
+    }
+
+    private static function has_language_menu_class( $classes ) {
+        if ( empty( $classes ) ) {
+            return false;
+        }
+
+        if ( is_string( $classes ) ) {
+            $classes = preg_split( '/\s+/', $classes );
+        }
+
+        return in_array( self::MENU_ITEM_CLASS, (array) $classes, true );
+    }
+
+    private static function build_menu_language_items( $settings, $current ) {
+        $available = WPAIT_Settings::get_available_languages();
+        $items     = array();
+
+        foreach ( (array) $settings['languages'] as $language_code ) {
+            if ( ! isset( $available[ $language_code ] ) ) {
+                continue;
+            }
+
+            $items[ $language_code ] = array(
+                'label' => $available[ $language_code ]['label'],
+                'url'   => home_url( '/' . $language_code . '/' ),
+                'flag'  => isset( $available[ $language_code ]['flag'] )
+                    ? WPAIT_PLUGIN_URL . 'assets/flags/' . $available[ $language_code ]['flag']
+                    : '',
+            );
+        }
+
+        if ( ! isset( $items[ $current ] ) && ! empty( $items ) ) {
+            $first = array_key_first( $items );
+            if ( $first ) {
+                $current = $first;
+            }
+        }
+
+        return $items;
+    }
+
+    private static function build_child_menu_item( $parent_item, $language_code, $data ) {
+        $item_id = self::get_placeholder_id();
+
+        $item                       = new stdClass();
+        $item->ID                   = $item_id;
+        $item->db_id                = 0;
+        $item->menu_item_parent     = $parent_item->ID;
+        $item->object_id            = 0;
+        $item->object               = 'custom';
+        $item->type                 = 'custom';
+        $item->title                = $data['label'];
+        $item->url                  = $data['url'];
+        $item->target               = '';
+        $item->attr_title           = '';
+        $item->description          = '';
+        $item->classes              = array( 'wpait-language-menu__child' );
+        $item->xfn                  = '';
+        $item->status               = 'publish';
+        $item->wpait_language_code  = $language_code;
+        $item->wpait_language_label = $data['label'];
+        $item->wpait_language_flag  = $data['flag'];
+
+        return $item;
     }
 }
