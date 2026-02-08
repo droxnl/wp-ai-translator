@@ -1,0 +1,28 @@
+.wpait-language-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.wpait-language-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #ccd0d4;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+.wpait-language-card img {
+  width: 28px;
+  height: 20px;
+  display: block;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.wpait-language-name {
+  font-weight: 600;
+}
