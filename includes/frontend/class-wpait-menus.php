@@ -9,10 +9,25 @@ class WPAIT_Menus {
 
     public static function register() {
         add_action( 'load-nav-menus.php', array( __CLASS__, 'register_menu_meta_box' ) );
+        add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_admin_assets' ) );
         add_action( 'wp_update_nav_menu_item', array( __CLASS__, 'handle_menu_item_save' ), 10, 3 );
         add_filter( 'wp_setup_nav_menu_item', array( __CLASS__, 'setup_menu_item' ) );
         add_filter( 'walker_nav_menu_start_el', array( __CLASS__, 'render_language_menu_item' ), 10, 4 );
         add_filter( 'wp_nav_menu_args', array( __CLASS__, 'assign_menu_for_language' ) );
+    }
+
+    public static function enqueue_admin_assets( $hook ) {
+        if ( 'nav-menus.php' !== $hook ) {
+            return;
+        }
+
+        wp_enqueue_script(
+            'wpait-menus',
+            WPAIT_PLUGIN_URL . 'assets/menus.js',
+            array( 'jquery', 'nav-menu' ),
+            WPAIT_VERSION,
+            true
+        );
     }
 
     public static function register_menu_meta_box() {
@@ -30,6 +45,7 @@ class WPAIT_Menus {
         $item              = new stdClass();
         $item->db_id        = 0;
         $item->object_id    = 0;
+        $item->ID           = self::get_placeholder_id();
         $item->object       = 'wpait_language_menu';
         $item->menu_item_parent = 0;
         $item->type         = 'custom';
@@ -54,6 +70,18 @@ class WPAIT_Menus {
         echo '</span>';
         echo '</p>';
         echo '</div>';
+    }
+
+    private static function get_placeholder_id() {
+        if ( ! isset( $GLOBALS['_nav_menu_placeholder'] ) ) {
+            $GLOBALS['_nav_menu_placeholder'] = 0;
+        }
+
+        $GLOBALS['_nav_menu_placeholder'] = ( 0 > $GLOBALS['_nav_menu_placeholder'] )
+            ? $GLOBALS['_nav_menu_placeholder'] - 1
+            : -1;
+
+        return $GLOBALS['_nav_menu_placeholder'];
     }
 
     public static function handle_menu_item_save( $menu_id, $menu_item_db_id, $args ) {
