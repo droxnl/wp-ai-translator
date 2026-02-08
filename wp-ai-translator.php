@@ -24,6 +24,7 @@ function autoload_wpait() {
     require_once WPAIT_PLUGIN_DIR . 'includes/admin/class-wpait-queue.php';
     require_once WPAIT_PLUGIN_DIR . 'includes/api/class-wpait-openai.php';
     require_once WPAIT_PLUGIN_DIR . 'includes/frontend/class-wpait-language-widget.php';
+    require_once WPAIT_PLUGIN_DIR . 'includes/frontend/class-wpait-menus.php';
     require_once WPAIT_PLUGIN_DIR . 'includes/translation/class-wpait-translator.php';
 }
 
@@ -31,6 +32,7 @@ function wpait_bootstrap() {
     WPAIT_Settings::register();
     WPAIT_Pages::register();
     WPAIT_Queue::register();
+    WPAIT_Menus::register();
     add_action( 'widgets_init', 'wpait_register_language_widget' );
     add_action( 'wp_enqueue_scripts', 'wpait_enqueue_frontend_assets' );
     add_shortcode( 'wpait_language_menu', array( 'WPAIT_Language_Widget', 'render_menu_shortcode' ) );
