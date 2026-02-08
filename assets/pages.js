@@ -11,6 +11,7 @@
     const closeButton = modal.querySelector('.wpait-modal__close');
     const cancelButton = modal.querySelector('.wpait-modal__cancel');
     const confirmButton = modal.querySelector('.wpait-modal__confirm');
+    const translateButton = document.getElementById('wpait-translate-selected');
     let selectedPostIds = [];
     let poller = null;
 
@@ -49,6 +50,10 @@
         }
         items.forEach((item) => {
             const row = document.createElement('tr');
+            if (item.status) {
+                const statusClass = `wpait-status--${item.status.toLowerCase()}`;
+                row.classList.add(statusClass);
+            }
             ['post_title', 'language', 'status', 'message'].forEach((key) => {
                 const cell = document.createElement('td');
                 cell.textContent = item[key] || '';
@@ -74,7 +79,8 @@
         });
     };
 
-    const openModal = () => {
+    const openModal = (postIds) => {
+        selectedPostIds = postIds;
         buildLanguageOptions();
         modal.classList.add('wpait-modal--active');
         modal.setAttribute('aria-hidden', 'false');
@@ -114,12 +120,27 @@
             }
             event.preventDefault();
             const checked = form.querySelectorAll('input[name="post[]"]:checked');
-            selectedPostIds = Array.from(checked).map((checkbox) => checkbox.value);
-            if (!selectedPostIds.length) {
+            const postIds = Array.from(checked).map((checkbox) => checkbox.value);
+            if (!postIds.length) {
                 window.alert(wpaitPages.emptySelectionText || 'Select at least one page.');
                 return;
             }
-            openModal();
+            openModal(postIds);
+        });
+    }
+
+    if (translateButton) {
+        translateButton.addEventListener('click', () => {
+            if (!form) {
+                return;
+            }
+            const checked = form.querySelectorAll('input[name="post[]"]:checked');
+            const postIds = Array.from(checked).map((checkbox) => checkbox.value);
+            if (!postIds.length) {
+                window.alert(wpaitPages.emptySelectionText || 'Select at least one page.');
+                return;
+            }
+            openModal(postIds);
         });
     }
 

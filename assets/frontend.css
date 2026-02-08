@@ -1,0 +1,38 @@
+.wpait-language-menu {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.wpait-language-menu__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    color: inherit;
+    padding: 4px 6px;
+    border-radius: 4px;
+}
+
+.wpait-language-menu__item:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.wpait-language-menu__item.is-current {
+    font-weight: 600;
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.wpait-language-menu__item.is-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.wpait-language-menu__flag img {
+    width: 18px;
+    height: 12px;
+    display: block;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}

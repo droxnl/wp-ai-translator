@@ -32,11 +32,17 @@ function wpait_bootstrap() {
     WPAIT_Pages::register();
     WPAIT_Queue::register();
     add_action( 'widgets_init', 'wpait_register_language_widget' );
+    add_action( 'wp_enqueue_scripts', 'wpait_enqueue_frontend_assets' );
+    add_shortcode( 'wpait_language_menu', array( 'WPAIT_Language_Widget', 'render_menu_shortcode' ) );
 }
 add_action( 'plugins_loaded', 'wpait_bootstrap' );
 
 function wpait_register_language_widget() {
     register_widget( 'WPAIT_Language_Widget' );
+}
+
+function wpait_enqueue_frontend_assets() {
+    wp_enqueue_style( 'wpait-frontend', WPAIT_PLUGIN_URL . 'assets/frontend.css', array(), WPAIT_VERSION );
 }
 
 function wpait_activate() {
