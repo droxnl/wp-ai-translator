@@ -6,9 +6,7 @@ jQuery( function( $ ) {
         return;
     }
 
-    $( '#submit-wpait-language-menu' ).on( 'click', function( event ) {
-        event.preventDefault();
-
+    $( '#submit-wpait-language-menu' ).on( 'click', function() {
         var $checkbox = $metaBox.find( '.menu-item-checkbox' ).first();
 
         if ( ! $checkbox.length ) {
@@ -16,7 +14,5 @@ jQuery( function( $ ) {
         }
 
         $checkbox.prop( 'checked', true );
-        wpNavMenu.addItemToMenu( $checkbox );
-        $checkbox.prop( 'checked', false );
     } );
 } );
