@@ -65,6 +65,14 @@ class WPAIT_Settings {
         );
 
         add_settings_field(
+            'default_language',
+            __( 'Default Language', 'wp-ai-translator' ),
+            array( __CLASS__, 'render_default_language' ),
+            'wpait-settings',
+            'wpait_language_section'
+        );
+
+        add_settings_field(
             'languages',
             __( 'Available Languages', 'wp-ai-translator' ),
             array( __CLASS__, 'render_languages' ),
@@ -78,9 +86,18 @@ class WPAIT_Settings {
             'api_key'   => '',
             'model'     => 'gpt-4o-mini',
             'languages' => array( 'en', 'nl' ),
+            'default_language' => 'en',
         );
         $settings = get_option( self::OPTION_KEY, array() );
-        return wp_parse_args( $settings, $defaults );
+        $settings = wp_parse_args( $settings, $defaults );
+        $available = self::get_available_languages();
+        if ( empty( $settings['default_language'] ) || ! isset( $available[ $settings['default_language'] ] ) ) {
+            $settings['default_language'] = $defaults['default_language'];
+        }
+        if ( ! in_array( $settings['default_language'], (array) $settings['languages'], true ) ) {
+            $settings['languages'][] = $settings['default_language'];
+        }
+        return $settings;
     }
 
     public static function render_api_key() {
@@ -104,6 +121,22 @@ class WPAIT_Settings {
             );
         }
         echo '</select>';
+    }
+
+    public static function render_default_language() {
+        $settings  = self::get_settings();
+        $languages = self::get_available_languages();
+        echo '<select name="' . esc_attr( self::OPTION_KEY ) . '[default_language]">';
+        foreach ( $languages as $code => $language ) {
+            printf(
+                '<option value="%1$s" %2$s>%3$s</option>',
+                esc_attr( $code ),
+                selected( $settings['default_language'], $code, false ),
+                esc_html( $language['label'] )
+            );
+        }
+        echo '</select>';
+        echo '<p class="description">' . esc_html__( 'Used as the source language for pages without a specific language set.', 'wp-ai-translator' ) . '</p>';
     }
 
     public static function render_languages() {
@@ -182,7 +215,7 @@ class WPAIT_Settings {
         }
         check_admin_referer( 'wpait_clone_menus', 'wpait_clone_menus_nonce' );
         $settings  = self::get_settings();
-        $languages = array_diff( $settings['languages'], array( 'en' ) );
+        $languages = array_diff( $settings['languages'], array( $settings['default_language'] ) );
         $menus     = wp_get_nav_menus();
         $created   = array();
 
