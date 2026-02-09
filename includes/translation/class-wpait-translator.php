@@ -103,7 +103,7 @@ class WPAIT_Translator {
                 $translated .= $part['value'];
                 continue;
             }
-            $plain_text = trim( html_entity_decode( wp_strip_all_tags( $text ) ) );
+            $plain_text = trim( wp_strip_all_tags( html_entity_decode( $text ) ) );
             if ( '' === $plain_text ) {
                 $translated .= $part['value'];
                 continue;
