@@ -57,9 +57,9 @@ class WPAIT_Translator {
             'post_type'    => $post->post_type,
         );
 
+        $base_slug = $post->post_name ? $post->post_name : sanitize_title( $post->post_title );
         if ( $target_language !== $settings['default_language'] ) {
-            $base_slug            = $post->post_name ? $post->post_name : sanitize_title( $post->post_title );
-            $translated_slug      = $target_language . '/' . $base_slug;
+            $translated_slug       = $base_slug . '-' . sanitize_title( $target_language );
             $new_post['post_name'] = wp_unique_post_slug(
                 $translated_slug,
                 0,
@@ -85,6 +85,7 @@ class WPAIT_Translator {
 
         update_post_meta( $new_post_id, '_wpait_translation_group', $group );
         update_post_meta( $new_post_id, '_wpait_language', $target_language );
+        update_post_meta( $new_post_id, '_wpait_base_slug', $base_slug );
 
         return $new_post_id;
     }

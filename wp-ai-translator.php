@@ -24,6 +24,7 @@ function autoload_wpait() {
     require_once WPAIT_PLUGIN_DIR . 'includes/admin/class-wpait-queue.php';
     require_once WPAIT_PLUGIN_DIR . 'includes/api/class-wpait-openai.php';
     require_once WPAIT_PLUGIN_DIR . 'includes/frontend/class-wpait-content-filters.php';
+    require_once WPAIT_PLUGIN_DIR . 'includes/frontend/class-wpait-language-routes.php';
     require_once WPAIT_PLUGIN_DIR . 'includes/frontend/class-wpait-language-widget.php';
     require_once WPAIT_PLUGIN_DIR . 'includes/frontend/class-wpait-menus.php';
     require_once WPAIT_PLUGIN_DIR . 'includes/translation/class-wpait-translator.php';
@@ -34,6 +35,7 @@ function wpait_bootstrap() {
     WPAIT_Pages::register();
     WPAIT_Queue::register();
     WPAIT_Content_Filters::register();
+    WPAIT_Language_Routes::register();
     WPAIT_Menus::register();
     add_action( 'widgets_init', 'wpait_register_language_widget' );
     add_action( 'wp_enqueue_scripts', 'wpait_enqueue_frontend_assets' );
@@ -53,11 +55,14 @@ function wpait_activate() {
     if ( ! wp_next_scheduled( 'wpait_process_queue' ) ) {
         wp_schedule_event( time() + MINUTE_IN_SECONDS, 'wpait_minutely', 'wpait_process_queue' );
     }
+    WPAIT_Language_Routes::register_rewrites();
+    flush_rewrite_rules();
 }
 register_activation_hook( __FILE__, 'wpait_activate' );
 
 function wpait_deactivate() {
     wp_clear_scheduled_hook( 'wpait_process_queue' );
+    flush_rewrite_rules();
 }
 register_deactivation_hook( __FILE__, 'wpait_deactivate' );
 
