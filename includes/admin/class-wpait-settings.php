@@ -475,7 +475,7 @@ class WPAIT_Settings {
                 'menu-item-url'     => '#',
                 'menu-item-status'  => 'publish',
                 'menu-item-type'    => 'custom',
-                'menu-item-classes' => array( WPAIT_Menus::MENU_ITEM_CLASS ),
+                'menu-item-classes' => WPAIT_Menus::MENU_ITEM_CLASS,
             )
         );
 
