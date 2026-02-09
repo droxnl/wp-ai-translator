@@ -103,6 +103,11 @@ class WPAIT_Translator {
                 $translated .= $part['value'];
                 continue;
             }
+            $plain_text = trim( html_entity_decode( wp_strip_all_tags( $text ) ) );
+            if ( '' === $plain_text ) {
+                $translated .= $part['value'];
+                continue;
+            }
             $response = WPAIT_OpenAI::translate( $text, $target_language );
             if ( is_wp_error( $response ) ) {
                 return $response;
