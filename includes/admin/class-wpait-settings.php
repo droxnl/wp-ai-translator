@@ -15,6 +15,7 @@ class WPAIT_Settings {
         add_action( 'admin_menu', array( __CLASS__, 'add_menu' ) );
         add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
         add_action( 'admin_post_wpait_clone_menus', array( __CLASS__, 'handle_clone_menus' ) );
+        add_action( 'admin_post_wpait_add_language_menu_item', array( __CLASS__, 'handle_add_language_menu_item' ) );
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
     }
 
@@ -348,10 +349,28 @@ class WPAIT_Settings {
         if ( isset( $_GET['wpait_menus'] ) && 'cloned' === $_GET['wpait_menus'] ) {
             echo '<div class="notice notice-success"><p>' . esc_html__( 'Menus cloned successfully.', 'wp-ai-translator' ) . '</p></div>';
         }
+        if ( isset( $_GET['wpait_menu_item'] ) && 'added' === $_GET['wpait_menu_item'] ) {
+            echo '<div class="notice notice-success"><p>' . esc_html__( 'Language selector added to the default menu.', 'wp-ai-translator' ) . '</p></div>';
+        }
+        if ( isset( $_GET['wpait_menu_item'] ) && 'exists' === $_GET['wpait_menu_item'] ) {
+            echo '<div class="notice notice-info"><p>' . esc_html__( 'Language selector already exists in the default menu.', 'wp-ai-translator' ) . '</p></div>';
+        }
+        if ( isset( $_GET['wpait_menu_item'] ) && 'missing' === $_GET['wpait_menu_item'] ) {
+            echo '<div class="notice notice-error"><p>' . esc_html__( 'Create a menu first before adding the language selector.', 'wp-ai-translator' ) . '</p></div>';
+        }
         echo '<form method="post" action="options.php">';
         settings_fields( 'wpait_menu_settings' );
         do_settings_sections( 'wpait-menus' );
         submit_button();
+        echo '</form>';
+
+        echo '<hr />';
+        echo '<h2>' . esc_html__( 'Language Selector', 'wp-ai-translator' ) . '</h2>';
+        echo '<p>' . esc_html__( 'Add the language selector to the default menu as a custom link.', 'wp-ai-translator' ) . '</p>';
+        echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+        echo '<input type="hidden" name="action" value="wpait_add_language_menu_item" />';
+        wp_nonce_field( 'wpait_add_language_menu_item', 'wpait_add_language_menu_item_nonce' );
+        submit_button( __( 'Add Language Selector to Default Menu', 'wp-ai-translator' ), 'secondary' );
         echo '</form>';
 
         echo '<hr />';
@@ -408,6 +427,65 @@ class WPAIT_Settings {
 
         update_option( 'wpait_menu_clones', $created, false );
         wp_safe_redirect( admin_url( 'admin.php?page=wpait-menus&wpait_menus=cloned' ) );
+        exit;
+    }
+
+    public static function handle_add_language_menu_item() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Unauthorized.', 'wp-ai-translator' ) );
+        }
+
+        check_admin_referer( 'wpait_add_language_menu_item', 'wpait_add_language_menu_item_nonce' );
+
+        $settings     = self::get_settings();
+        $menu_id      = 0;
+        $default_lang = isset( $settings['default_language'] ) ? $settings['default_language'] : '';
+
+        if ( $default_lang && ! empty( $settings['menu_assignments'][ $default_lang ] ) ) {
+            $menu_id = (int) $settings['menu_assignments'][ $default_lang ];
+        }
+
+        if ( ! $menu_id ) {
+            $menus = wp_get_nav_menus();
+            if ( ! empty( $menus ) ) {
+                $menu_id = (int) $menus[0]->term_id;
+            }
+        }
+
+        if ( ! $menu_id ) {
+            wp_safe_redirect( admin_url( 'admin.php?page=wpait-menus&wpait_menu_item=missing' ) );
+            exit;
+        }
+
+        $items = wp_get_nav_menu_items( $menu_id );
+        if ( $items ) {
+            foreach ( $items as $item ) {
+                if ( in_array( WPAIT_Menus::MENU_ITEM_CLASS, (array) $item->classes, true ) ) {
+                    wp_safe_redirect( admin_url( 'admin.php?page=wpait-menus&wpait_menu_item=exists' ) );
+                    exit;
+                }
+            }
+        }
+
+        $menu_item_id = wp_update_nav_menu_item(
+            $menu_id,
+            0,
+            array(
+                'menu-item-title'   => __( 'Language Selector', 'wp-ai-translator' ),
+                'menu-item-url'     => '#',
+                'menu-item-status'  => 'publish',
+                'menu-item-type'    => 'custom',
+                'menu-item-classes' => WPAIT_Menus::MENU_ITEM_CLASS,
+            )
+        );
+
+        if ( $menu_item_id && ! is_wp_error( $menu_item_id ) ) {
+            update_post_meta( $menu_item_id, WPAIT_Menus::MENU_ITEM_META_KEY, 1 );
+            wp_safe_redirect( admin_url( 'admin.php?page=wpait-menus&wpait_menu_item=added' ) );
+            exit;
+        }
+
+        wp_safe_redirect( admin_url( 'admin.php?page=wpait-menus&wpait_menu_item=missing' ) );
         exit;
     }
 }
