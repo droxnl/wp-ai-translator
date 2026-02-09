@@ -183,12 +183,7 @@ class WPAIT_Menus {
                 : '';
 
             if ( $flag ) {
-                $is_child = in_array( 'wpait-language-menu__child', (array) $item->classes, true );
-                if ( $is_child ) {
-                    $title = $flag . '<span class="wpait-language-menu__label">' . esc_html( $label ) . '</span>';
-                } else {
-                    $title = $flag . '<span class="screen-reader-text">' . esc_html( $label ) . '</span>';
-                }
+                $title = $flag . '<span class="screen-reader-text">' . esc_html( $label ) . '</span>';
             }
         }
 
