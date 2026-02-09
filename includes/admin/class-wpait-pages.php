@@ -5,11 +5,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class WPAIT_Pages {
+    const SALIENT_POST_TYPE = 'salient_g_sections';
+
     public static function register() {
-        add_filter( 'manage_edit-page_columns', array( __CLASS__, 'add_columns' ) );
-        add_action( 'manage_page_posts_custom_column', array( __CLASS__, 'render_columns' ), 10, 2 );
+        foreach ( self::get_supported_post_types() as $post_type ) {
+            add_filter( "manage_edit-{$post_type}_columns", array( __CLASS__, 'add_columns' ) );
+            add_action( "manage_{$post_type}_posts_custom_column", array( __CLASS__, 'render_columns' ), 10, 2 );
+            add_filter( "views_edit-{$post_type}", array( __CLASS__, 'add_language_views' ) );
+        }
         add_action( 'restrict_manage_posts', array( __CLASS__, 'add_language_filter' ) );
-        add_filter( 'views_edit-page', array( __CLASS__, 'add_language_views' ) );
         add_filter( 'parse_query', array( __CLASS__, 'filter_by_language' ) );
         add_filter( 'post_row_actions', array( __CLASS__, 'add_row_action' ), 10, 2 );
         add_action( 'admin_init', array( __CLASS__, 'handle_row_action' ) );
@@ -55,7 +59,7 @@ class WPAIT_Pages {
             }
             $translations = get_posts(
                 array(
-                    'post_type'   => 'page',
+                    'post_type'   => get_post_type( $post_id ),
                     'meta_key'    => '_wpait_translation_group',
                     'meta_value'  => $group,
                     'numberposts' => -1,
@@ -74,22 +78,23 @@ class WPAIT_Pages {
     }
 
     public static function add_language_filter( $post_type ) {
-        if ( 'page' !== $post_type ) {
+        if ( ! self::is_supported_post_type( $post_type ) ) {
             return;
         }
-        echo '<button type="button" class="button wpait-translate-selected" id="wpait-translate-selected">' . esc_html__( 'Translate selected pages', 'wp-ai-translator' ) . '</button>';
+        $label = self::get_post_type_label( $post_type, 'name' );
+        echo '<button type="button" class="button wpait-translate-selected" id="wpait-translate-selected">' . esc_html( sprintf( __( 'Translate selected %s', 'wp-ai-translator' ), $label ) ) . '</button>';
     }
 
     public static function add_language_views( $views ) {
         $screen = get_current_screen();
-        if ( ! $screen || 'page' !== $screen->post_type ) {
+        if ( ! $screen || ! self::is_supported_post_type( $screen->post_type ) ) {
             return $views;
         }
 
         $settings  = WPAIT_Settings::get_settings();
         $languages = WPAIT_Settings::get_available_languages();
         $current   = isset( $_GET['wpait_language'] ) ? sanitize_text_field( wp_unslash( $_GET['wpait_language'] ) ) : '';
-        $counts    = self::get_language_counts( $settings['languages'], $settings['default_language'] );
+        $counts    = self::get_language_counts( $settings['languages'], $settings['default_language'], $screen->post_type );
         $base_url  = remove_query_arg( array( 'wpait_language', 'paged' ) );
 
         $language_views = array();
@@ -121,7 +126,7 @@ class WPAIT_Pages {
         if ( ! is_admin() || 'edit.php' !== $GLOBALS['pagenow'] ) {
             return $query;
         }
-        if ( empty( $_GET['post_type'] ) || 'page' !== $_GET['post_type'] ) {
+        if ( empty( $_GET['post_type'] ) || ! self::is_supported_post_type( $_GET['post_type'] ) ) {
             return $query;
         }
         if ( empty( $_GET['wpait_language'] ) ) {
@@ -154,7 +159,7 @@ class WPAIT_Pages {
     }
 
     public static function add_row_action( $actions, $post ) {
-        if ( 'page' !== $post->post_type ) {
+        if ( ! self::is_supported_post_type( $post->post_type ) ) {
             return $actions;
         }
         $url = wp_nonce_url(
@@ -163,9 +168,9 @@ class WPAIT_Pages {
                     'wpait_action' => 'translate',
                     'post_id'      => $post->ID,
                 ),
-                admin_url( 'edit.php?post_type=page' )
+                admin_url( 'edit.php?post_type=' . $post->post_type )
             ),
-            'wpait_translate_page'
+            'wpait_translate_post'
         );
         $actions['wpait_translate'] = '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Translate', 'wp-ai-translator' ) . '</a>';
         return $actions;
@@ -178,8 +183,15 @@ class WPAIT_Pages {
         if ( 'translate' !== $_GET['wpait_action'] ) {
             return;
         }
-        check_admin_referer( 'wpait_translate_page' );
+        check_admin_referer( 'wpait_translate_post' );
         $post_id  = absint( $_GET['post_id'] );
+        $post_type = get_post_type( $post_id );
+        if ( ! $post_type || ! self::is_supported_post_type( $post_type ) ) {
+            return;
+        }
+        if ( ! self::current_user_can_translate( $post_type ) ) {
+            return;
+        }
         $settings = WPAIT_Settings::get_settings();
         $languages = array_diff( (array) $settings['languages'], array( $settings['default_language'] ) );
 
@@ -197,7 +209,7 @@ class WPAIT_Pages {
             );
         }
 
-        wp_safe_redirect( admin_url( 'edit.php?post_type=page&wpait_queued=1' ) );
+        wp_safe_redirect( admin_url( 'edit.php?post_type=' . $post_type . '&wpait_queued=1' ) );
         exit;
     }
 
@@ -206,7 +218,7 @@ class WPAIT_Pages {
             return;
         }
         $screen = get_current_screen();
-        if ( ! $screen || 'page' !== $screen->post_type ) {
+        if ( ! $screen || ! self::is_supported_post_type( $screen->post_type ) ) {
             return;
         }
         wp_enqueue_style( 'wpait-pages', WPAIT_PLUGIN_URL . 'assets/pages.css', array(), WPAIT_VERSION );
@@ -225,6 +237,8 @@ class WPAIT_Pages {
                 );
             }
         }
+        $post_type_label = self::get_post_type_label( $screen->post_type, 'name' );
+        $post_type_singular = self::get_post_type_label( $screen->post_type, 'singular_name' );
         wp_localize_script(
             'wpait-pages',
             'wpaitPages',
@@ -233,8 +247,14 @@ class WPAIT_Pages {
                 'nonce'          => wp_create_nonce( 'wpait_pages' ),
                 'languages'      => $available,
                 'defaultLanguage' => $settings['default_language'],
+                'postType'       => $screen->post_type,
+                'postTypeLabel'  => $post_type_label,
+                'postTypeSingularLabel' => $post_type_singular,
                 'emptyQueueText' => __( 'No queued jobs yet.', 'wp-ai-translator' ),
-                'emptySelectionText' => __( 'Select at least one page.', 'wp-ai-translator' ),
+                'emptySelectionText' => sprintf(
+                    __( 'Select at least one %s.', 'wp-ai-translator' ),
+                    strtolower( $post_type_singular )
+                ),
                 'clearedText'    => __( 'Translation history cleared.', 'wp-ai-translator' ),
             )
         );
@@ -244,18 +264,21 @@ class WPAIT_Pages {
         if ( 'edit.php' !== $GLOBALS['pagenow'] ) {
             return;
         }
-        if ( empty( $_GET['post_type'] ) || 'page' !== $_GET['post_type'] ) {
+        if ( empty( $_GET['post_type'] ) || ! self::is_supported_post_type( $_GET['post_type'] ) ) {
             return;
         }
+        $post_type = sanitize_text_field( wp_unslash( $_GET['post_type'] ) );
+        $label = self::get_post_type_label( $post_type, 'name' );
+        $singular = self::get_post_type_label( $post_type, 'singular_name' );
         ?>
         <div class="wpait-modal" id="wpait-translate-modal" aria-hidden="true">
             <div class="wpait-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="wpait-translate-title">
                 <div class="wpait-modal__header">
-                    <h2 id="wpait-translate-title"><?php esc_html_e( 'Translate Selected Pages', 'wp-ai-translator' ); ?></h2>
+                    <h2 id="wpait-translate-title"><?php echo esc_html( sprintf( __( 'Translate Selected %s', 'wp-ai-translator' ), $label ) ); ?></h2>
                     <button type="button" class="wpait-modal__close" aria-label="<?php esc_attr_e( 'Close', 'wp-ai-translator' ); ?>">×</button>
                 </div>
                 <div class="wpait-modal__body">
-                    <p class="wpait-modal__intro"><?php esc_html_e( 'Choose the languages you want to translate these pages into.', 'wp-ai-translator' ); ?></p>
+                    <p class="wpait-modal__intro"><?php echo esc_html( sprintf( __( 'Choose the languages you want to translate these %s into.', 'wp-ai-translator' ), strtolower( $label ) ) ); ?></p>
                     <div class="wpait-modal__languages" id="wpait-language-options"></div>
                     <div class="wpait-modal__progress">
                         <h3><?php esc_html_e( 'Translation Progress', 'wp-ai-translator' ); ?></h3>
@@ -263,7 +286,7 @@ class WPAIT_Pages {
                             <table class="widefat striped">
                                 <thead>
                                     <tr>
-                                        <th><?php esc_html_e( 'Page', 'wp-ai-translator' ); ?></th>
+                                        <th><?php echo esc_html( $singular ); ?></th>
                                         <th><?php esc_html_e( 'Language', 'wp-ai-translator' ); ?></th>
                                         <th><?php esc_html_e( 'Status', 'wp-ai-translator' ); ?></th>
                                         <th><?php esc_html_e( 'Message', 'wp-ai-translator' ); ?></th>
@@ -287,18 +310,35 @@ class WPAIT_Pages {
 
     public static function ajax_enqueue_translations() {
         check_ajax_referer( 'wpait_pages', 'nonce' );
-        if ( ! current_user_can( 'edit_pages' ) ) {
+        $post_type = isset( $_POST['post_type'] ) ? sanitize_text_field( wp_unslash( $_POST['post_type'] ) ) : 'page';
+        if ( ! self::is_supported_post_type( $post_type ) ) {
+            wp_send_json_error( array( 'message' => __( 'Invalid post type.', 'wp-ai-translator' ) ) );
+        }
+        if ( ! self::current_user_can_translate( $post_type ) ) {
             wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'wp-ai-translator' ) ) );
         }
         $post_ids  = isset( $_POST['post_ids'] ) ? array_map( 'absint', (array) $_POST['post_ids'] ) : array();
         $languages = isset( $_POST['languages'] ) ? array_map( 'sanitize_text_field', (array) $_POST['languages'] ) : array();
-        $post_ids  = array_filter( array_unique( $post_ids ) );
+        $post_ids  = array_filter(
+            array_unique( $post_ids ),
+            function ( $post_id ) use ( $post_type ) {
+                return $post_id && get_post_type( $post_id ) === $post_type;
+            }
+        );
         $settings  = WPAIT_Settings::get_settings();
         $allowed   = array_diff( (array) $settings['languages'], array( $settings['default_language'] ) );
         $languages = array_values( array_intersect( $languages, $allowed ) );
+        $singular = self::get_post_type_label( $post_type, 'singular_name' );
 
         if ( empty( $post_ids ) || empty( $languages ) ) {
-            wp_send_json_error( array( 'message' => __( 'Select at least one page and language.', 'wp-ai-translator' ) ) );
+            wp_send_json_error(
+                array(
+                    'message' => sprintf(
+                        __( 'Select at least one %s and language.', 'wp-ai-translator' ),
+                        strtolower( $singular )
+                    ),
+                )
+            );
         }
 
         $queued = 0;
@@ -329,7 +369,11 @@ class WPAIT_Pages {
 
     public static function ajax_get_queue() {
         check_ajax_referer( 'wpait_pages', 'nonce' );
-        if ( ! current_user_can( 'edit_pages' ) ) {
+        $post_type = isset( $_POST['post_type'] ) ? sanitize_text_field( wp_unslash( $_POST['post_type'] ) ) : 'page';
+        if ( ! self::is_supported_post_type( $post_type ) ) {
+            wp_send_json_error( array( 'message' => __( 'Invalid post type.', 'wp-ai-translator' ) ) );
+        }
+        if ( ! self::current_user_can_translate( $post_type ) ) {
             wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'wp-ai-translator' ) ) );
         }
         wp_send_json_success(
@@ -339,17 +383,17 @@ class WPAIT_Pages {
         );
     }
 
-    private static function get_language_counts( $languages, $default_language ) {
+    private static function get_language_counts( $languages, $default_language, $post_type ) {
         $counts = array(
             'all'       => 0,
             'languages' => array(),
         );
-        $total_counts = (array) wp_count_posts( 'page' );
+        $total_counts = (array) wp_count_posts( $post_type );
         $counts['all'] = array_sum( array_map( 'intval', $total_counts ) );
 
         foreach ( (array) $languages as $language ) {
             $query_args = array(
-                'post_type'      => 'page',
+                'post_type'      => $post_type,
                 'post_status'    => 'any',
                 'fields'         => 'ids',
                 'posts_per_page' => 1,
@@ -374,5 +418,33 @@ class WPAIT_Pages {
         }
 
         return $counts;
+    }
+
+    private static function get_supported_post_types() {
+        return array( 'page', self::SALIENT_POST_TYPE );
+    }
+
+    private static function is_supported_post_type( $post_type ) {
+        return in_array( $post_type, self::get_supported_post_types(), true );
+    }
+
+    private static function get_post_type_label( $post_type, $label_key = 'name' ) {
+        $post_type_object = get_post_type_object( $post_type );
+        if ( $post_type_object && isset( $post_type_object->labels ) && isset( $post_type_object->labels->{$label_key} ) ) {
+            return $post_type_object->labels->{$label_key};
+        }
+        if ( 'singular_name' === $label_key ) {
+            return ucfirst( $post_type );
+        }
+        return ucfirst( $post_type );
+    }
+
+    private static function current_user_can_translate( $post_type ) {
+        $post_type_object = get_post_type_object( $post_type );
+        $capability = $post_type_object && isset( $post_type_object->cap->edit_posts )
+            ? $post_type_object->cap->edit_posts
+            : 'edit_posts';
+
+        return current_user_can( $capability );
     }
 }
