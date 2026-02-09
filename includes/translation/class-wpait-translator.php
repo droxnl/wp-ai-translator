@@ -10,9 +10,13 @@ class WPAIT_Translator {
         if ( ! $group ) {
             return false;
         }
+        $post_type = get_post_type( $post_id );
+        if ( ! $post_type ) {
+            $post_type = 'page';
+        }
         $translations = get_posts(
             array(
-                'post_type'   => 'page',
+                'post_type'   => $post_type,
                 'meta_key'    => '_wpait_translation_group',
                 'meta_value'  => $group,
                 'numberposts' => 1,

@@ -73,6 +73,7 @@
         return $.post(wpaitPages.ajaxUrl, {
             action: 'wpait_get_queue',
             nonce: wpaitPages.nonce,
+            post_type: wpaitPages.postType,
         }).done((response) => {
             if (response.success) {
                 renderQueue(response.data.queue || []);
@@ -133,6 +134,7 @@
             nonce: wpaitPages.nonce,
             post_ids: selectedPostIds,
             languages: languages,
+            post_type: wpaitPages.postType,
         }).done((response) => {
             if (response.success) {
                 const queued = response.data.queued || 0;
