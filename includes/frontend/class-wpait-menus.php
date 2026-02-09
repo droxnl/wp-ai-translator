@@ -132,6 +132,13 @@ class WPAIT_Menus {
             return $items;
         }
 
+        if ( ! isset( $language_items[ $current ] ) ) {
+            $fallback = array_key_first( $language_items );
+            if ( $fallback ) {
+                $current = $fallback;
+            }
+        }
+
         $new_items = array();
 
         foreach ( $items as $item ) {
