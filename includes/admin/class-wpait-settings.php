@@ -309,6 +309,10 @@ class WPAIT_Settings {
                 'label' => __( 'Spanish', 'wp-ai-translator' ),
                 'flag'  => 'es.svg',
             ),
+            'ru' => array(
+                'label' => __( 'Russian', 'wp-ai-translator' ),
+                'flag'  => 'ru.svg',
+            ),
         );
     }
 
